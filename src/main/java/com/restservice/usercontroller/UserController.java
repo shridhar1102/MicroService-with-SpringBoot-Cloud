@@ -2,6 +2,7 @@ package com.restservice.usercontroller;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Optional;
 
 import javax.validation.Valid;
 
@@ -19,32 +20,36 @@ import org.springframework.hateoas.mvc.ControllerLinkBuilder;
 
 import static org.springframework.hateoas.mvc.ControllerLinkBuilder.*;
 
-import com.restserive.user.User;
-import com.restservice.userdao.UserDao;
+import com.restservice.user.User;
+import com.restservice.userdao.PostRepository;
+import com.restservice.userdao.UserRepository;
 
 @RestController
 public class UserController {
 	
 	@Autowired
-	private UserDao userDao;
+	private UserRepository userRespository;
+	@Autowired
+	private PostRepository postRepository;
+	
 	
 	@GetMapping(path="/users")
 	public List<User> retrievAll()
 	{
-		return userDao.findAll();
+		return userRespository.findAll();
 	}
 	
 	@GetMapping(path="/users/{id}")
 	public Resource<User> retrievOne(@PathVariable int id)
 	{
 		
-		User user= userDao.findById(id);
-		if(user==null)
+		Optional<User> user= userRespository.findById(id);
+		if(!user.isPresent())
 		{
 			throw new UserNotFoundException("User Not Found");
 		}
 		
-		Resource<User> resource= new Resource<User>(user);
+		Resource<User> resource= new Resource<User>(user.get());
 		ControllerLinkBuilder lintTo=linkTo(methodOn(this.getClass()).retrievAll());
 		resource.add(lintTo.withRel("All-Users"));
 
@@ -54,7 +59,7 @@ public class UserController {
 	@PostMapping(path="/users")
 	public ResponseEntity<Object> createUser(@Valid @RequestBody User user)
 	{
-		 User savedUser=userDao.save(user);
+		 User savedUser=userRespository.save(user);
 		 URI location= ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(savedUser.getId()).toUri();
 		 return ResponseEntity.created(location).build();
 	}
@@ -62,12 +67,38 @@ public class UserController {
 	@DeleteMapping(path="/users/{id}")
 	public void deleteById(@PathVariable int id)
 	{
-		User deletedUser= userDao.deleteById(id);
-		if(deletedUser==null)
+		 userRespository.deleteById(id);
+		
+		
+	}
+	
+	@GetMapping(path="/users/{id}/posts")
+	public List<Post> retrieveAll(@PathVariable int id)
+	{
+		
+		Optional<User> user= userRespository.findById(id);
+		if(!user.isPresent())
 		{
 			throw new UserNotFoundException("User Not Found");
 		}
 		
+		return user.get().getPosts();
+	}
+	
+	@PostMapping(path="/users/{id}/posts")
+	public ResponseEntity<Object> createPost(@PathVariable int id, @RequestBody Post post)
+	{
+		Optional<User> userOptional= userRespository.findById(id);
+		if(!userOptional.isPresent())
+		{
+			throw new UserNotFoundException("User Not Found");
+		}
+		User user=userOptional.get();
+        post.setUser(user);	
+        postRepository.save(post);
+
+		 URI location= ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(post.getId()).toUri();
+		 return ResponseEntity.created(location).build();
 	}
 
 }
